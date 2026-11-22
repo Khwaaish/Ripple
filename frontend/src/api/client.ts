@@ -1,4 +1,4 @@
-import type { FacilityType, NetworkEdge, NetworkNode, SupplyNetwork } from './types'
+import type { FacilityType, NetworkEdge, NetworkNode, SimulationResult, SupplyNetwork } from './types'
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '')
 
@@ -75,4 +75,72 @@ export async function fetchDemoNetwork(signal?: AbortSignal): Promise<SupplyNetw
     throw new ApiError('Ripple API returned a response that was not valid JSON.')
   }
   return parseDemoNetwork(payload)
+}
+
+function apiErrorMessage(payload: unknown, fallback: string): string {
+  if (!isRecord(payload)) return fallback
+  const detail = payload.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail.flatMap((item) => {
+      if (!isRecord(item)) return []
+      const location = Array.isArray(item.loc) ? item.loc.filter((part) => part !== 'body').join(' → ') : ''
+      const message = typeof item.msg === 'string' ? item.msg : 'Invalid value'
+      return [location ? `${location}: ${message}` : message]
+    })
+    if (messages.length) return messages.join('; ')
+  }
+  return fallback
+}
+
+/** Submit a validated network and failed facility IDs to the deterministic simulator. */
+export async function simulateNetwork(
+  network: SupplyNetwork,
+  failedNodes: string[],
+  signal?: AbortSignal,
+): Promise<SimulationResult> {
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/simulate`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ network, failed_nodes: failedNodes }),
+      signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    throw new ApiError(`Could not reach the Ripple API at ${API_BASE_URL}. Check that the backend is running and retry.`)
+  }
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    throw new ApiError('Ripple API returned a response that was not valid JSON.', response.status)
+  }
+  if (!response.ok) {
+    throw new ApiError(apiErrorMessage(payload, `Ripple API returned HTTP ${response.status} while running the simulation.`), response.status)
+  }
+  if (!isRecord(payload)
+    || !Array.isArray(payload.failed_nodes)
+    || !Array.isArray(payload.directly_impacted_nodes)
+    || !Array.isArray(payload.second_order_impacted_nodes)
+    || !Array.isArray(payload.third_order_impacted_nodes)
+    || !Array.isArray(payload.further_impacted_nodes)
+    || !Array.isArray(payload.all_impacted_nodes)
+    || !Array.isArray(payload.overloaded_nodes)
+    || !Array.isArray(payload.critical_shortage_nodes)
+    || !Array.isArray(payload.round_snapshots)
+    || !isRecord(payload.node_impacts)
+    || typeof payload.severity !== 'string'
+    || !finite(payload.impact_score)
+    || !finite(payload.propagation_rounds)
+    || !(payload.bottleneck_node === null || typeof payload.bottleneck_node === 'string')
+    || !(payload.first_predicted_stockout_time_h === null || finite(payload.first_predicted_stockout_time_h))
+    || !finite(payload.recovery_estimate_h)
+    || !finite(payload.intervention_cost)
+    || typeof payload.intervention !== 'string'
+    || !Array.isArray(payload.reasoning)) {
+    throw new ApiError('Ripple API returned a simulation result with an unexpected shape.')
+  }
+  return payload as unknown as SimulationResult
 }

@@ -1,30 +1,183 @@
-import { ArrowRight, Check, CircleHelp, GitBranch, Plus, SlidersHorizontal, Sparkles, Waypoints } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Check, LoaderCircle, Play, RefreshCw, X } from 'lucide-react'
+import { fetchDemoNetwork, simulateNetwork } from '../api/client'
+import type { FacilityType, SimulationResult, SupplyNetwork } from '../api/types'
 import { SectionHeading } from '../components/SectionHeading'
 
-const steps = [
-  { number: '01', title: 'Choose a disruption', text: 'Select a facility and disruption profile.', icon: GitBranch, active: true },
-  { number: '02', title: 'Set the scope', text: 'Adjust timing, duration, and severity.', icon: SlidersHorizontal, active: false },
-  { number: '03', title: 'Review scenario', text: 'Validate inputs before simulation.', icon: Check, active: false },
-]
+const typeLabel: Record<FacilityType, string> = {
+  supplier: 'Supplier',
+  warehouse: 'Warehouse',
+  store: 'Store',
+}
+
+const typeTone: Record<FacilityType, string> = {
+  supplier: 'border-sky-300/20 bg-sky-300/[.06] text-sky-200',
+  warehouse: 'border-mint/20 bg-mint/[.06] text-mint',
+  store: 'border-violet-300/20 bg-violet-300/[.06] text-violet-200',
+}
+
+function ResultMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return <div className="rounded-lg border border-line bg-[#0d1117] p-3.5">
+    <p className="text-[10px] font-medium uppercase tracking-[.1em] text-slate-600">{label}</p>
+    <p className="mt-1.5 break-words text-sm font-semibold text-slate-100">{value}</p>
+    {detail && <p className="mt-1 text-[10px] text-slate-500">{detail}</p>}
+  </div>
+}
+
+function NodeList({ label, nodes }: { label: string; nodes: string[] }) {
+  return <div>
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs font-medium text-slate-300">{label}</p>
+      <span className="rounded border border-line bg-[#0d1117] px-1.5 py-0.5 text-[10px] text-slate-500">{nodes.length}</span>
+    </div>
+    {nodes.length ? <div className="mt-2 flex flex-wrap gap-1.5">{nodes.map((node) => <span key={node} className="rounded-md border border-line bg-[#0d1117] px-2 py-1 font-mono text-[10px] text-slate-300">{node}</span>)}</div>
+      : <p className="mt-2 text-[11px] text-slate-600">None</p>}
+  </div>
+}
+
+function SimulationSummary({ result }: { result: SimulationResult }) {
+  const cascadeGroups = [
+    ['Direct impacts', result.directly_impacted_nodes],
+    ['Second order', result.second_order_impacted_nodes],
+    ['Third order', result.third_order_impacted_nodes],
+    ['Further impacts', result.further_impacted_nodes],
+  ] as const
+
+  return <section className="panel-card p-5 sm:p-6" aria-labelledby="simulation-results-title" aria-live="polite">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><div className="flex items-center gap-2"><span className="status-dot status-dot-green" /><p className="text-[10px] font-medium uppercase tracking-[.14em] text-mint">Simulation complete</p></div><h3 id="simulation-results-title" className="mt-2 text-base font-semibold text-slate-100">Cascade results</h3><p className="mt-1 text-xs text-slate-500">Calculated by the Ripple simulation API for {result.failed_nodes.join(', ')}.</p></div>
+      <span className="rounded-md border border-amber-300/20 bg-amber-300/[.07] px-2.5 py-1 text-xs font-semibold capitalize text-amber-200">{result.severity} severity</span>
+    </div>
+    <div className="mt-5 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      <ResultMetric label="Impact score" value={result.impact_score.toFixed(3)} detail="Weighted unmet demand score" />
+      <ResultMetric label="Affected facilities" value={String(result.all_impacted_nodes.length)} detail="Excludes failed facilities" />
+      <ResultMetric label="Cascade rounds" value={String(result.propagation_rounds)} />
+      <ResultMetric label="First predicted stockout" value={result.first_predicted_stockout_time_h === null ? 'None' : `${result.first_predicted_stockout_time_h} h`} />
+      <ResultMetric label="Bottleneck" value={result.bottleneck_node ?? 'None'} />
+      <ResultMetric label="Recovery estimate" value={`${result.recovery_estimate_h} h`} />
+      <ResultMetric label="Critical shortages" value={String(result.critical_shortage_nodes.length)} detail={result.critical_shortage_nodes.join(', ') || 'None'} />
+      <ResultMetric label="Overloaded facilities" value={String(result.overloaded_nodes.length)} detail={result.overloaded_nodes.join(', ') || 'None'} />
+    </div>
+    <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      <div className="space-y-4">
+        <p className="text-xs font-semibold text-slate-200">Affected nodes by cascade order</p>
+        {cascadeGroups.map(([label, nodes]) => <NodeList key={label} label={label} nodes={nodes} />)}
+      </div>
+      <div className="space-y-4">
+        <NodeList label="All impacted nodes" nodes={result.all_impacted_nodes} />
+        {result.reasoning.length > 0 && <div><p className="text-xs font-medium text-slate-300">Engine notes</p><ul className="mt-2 space-y-1.5">{result.reasoning.map((reason, index) => <li key={`${index}-${reason}`} className="text-[11px] leading-relaxed text-slate-500">{reason}</li>)}</ul></div>}
+      </div>
+    </div>
+  </section>
+}
 
 export function ScenarioCreatorPage() {
-  return <div className="space-y-6 pb-10">
-    <SectionHeading title="Scenario creator" description="Build a controlled disruption to explore network exposure." action={<button className="button-secondary"><CircleHelp size={14} /> Scenario guide</button>} />
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.75fr)]">
-      <section className="panel-card p-5 sm:p-7">
-        <div className="flex items-start justify-between"><div><p className="text-xs font-medium text-mint">NEW SCENARIO</p><h3 className="mt-2 text-lg font-semibold text-slate-100">Start with a disruption</h3><p className="mt-1 text-sm text-slate-500">Choose a node and define the event characteristics.</p></div><span className="icon-tile icon-mint"><Waypoints size={18} /></span></div>
-        <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          <label className="field-label">Scenario name<input className="dark-input mt-2" placeholder="e.g. Port of Seattle delay" /></label>
-          <label className="field-label">Disruption type<select className="dark-input mt-2" defaultValue="supplier"><option value="supplier">Supplier outage</option><option value="warehouse">Warehouse disruption</option><option value="transport">Transport delay</option><option value="store">Store demand shock</option></select></label>
-          <label className="field-label sm:col-span-2">Affected facility<select className="dark-input mt-2" defaultValue="SUP-01"><option value="SUP-01">SUP-01 · Northstar Components</option><option value="WH-02">WH-02 · Portland Distribution</option><option value="ST-04">ST-04 · Seattle Central</option></select></label>
+  const [network, setNetwork] = useState<SupplyNetwork | null>(null)
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [simulationError, setSimulationError] = useState<string | null>(null)
+  const [loadingNetwork, setLoadingNetwork] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
+  const [result, setResult] = useState<SimulationResult | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoadingNetwork(true)
+    setLoadError(null)
+    fetchDemoNetwork(controller.signal)
+      .then((data) => {
+        setNetwork(data)
+        setSelectedNodes((current) => current.filter((id) => data.nodes.some((node) => node.id === id)))
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setNetwork(null)
+        setSelectedNodes([])
+        setLoadError(error instanceof Error ? error.message : 'Could not load the facility network.')
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoadingNetwork(false) })
+    return () => controller.abort()
+  }, [retryKey])
+
+  const selectedSet = useMemo(() => new Set(selectedNodes), [selectedNodes])
+  const updateSelection = useCallback((nodeId: string, checked: boolean) => {
+    setSelectedNodes((current) => checked
+      ? current.includes(nodeId) ? current : [...current, nodeId]
+      : current.filter((id) => id !== nodeId))
+    setSimulationError(null)
+    setResult(null)
+  }, [])
+
+  async function submitScenario(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!network) return
+    const validIds = new Set(network.nodes.map((node) => node.id))
+    const failedNodes = [...new Set(selectedNodes)].filter((id) => validIds.has(id))
+    if (!failedNodes.length) {
+      setSimulationError('Select at least one facility from the loaded network.')
+      return
+    }
+    setRunning(true)
+    setSimulationError(null)
+    setResult(null)
+    try {
+      setResult(await simulateNetwork(network, failedNodes))
+    } catch (error) {
+      setSimulationError(error instanceof Error ? error.message : 'The simulation could not be completed.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return <div className="space-y-5 pb-10">
+    <SectionHeading title="Scenario creator" description="Select facilities to fail and run a deterministic cascade simulation." />
+
+    <form className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.72fr)]" onSubmit={submitScenario}>
+      <section className="panel-card p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="text-[10px] font-medium uppercase tracking-[.14em] text-mint">SCENARIO INPUT</p><h3 className="mt-2 text-base font-semibold text-slate-100">Choose failed facilities</h3><p className="mt-1 text-xs leading-relaxed text-slate-500">Select one or more nodes in the live demo network. The simulator uses node IDs; no unsupported timing or disruption parameters are sent.</p></div>
+          <div className="rounded-md border border-line bg-[#0d1117] px-2.5 py-1.5 text-[10px] text-slate-500">{network ? `${network.nodes.length} facilities` : 'Network pending'}</div>
         </div>
-        <div className="mt-6 rounded-xl border border-line bg-[#0d1117] p-4"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-slate-200">Disruption duration</p><p className="mt-1 text-xs text-slate-500">Estimated time before normal operations resume</p></div><span className="rounded-md border border-line bg-panel px-2.5 py-1.5 text-xs font-medium text-slate-300">24 hours</span></div><input type="range" min="1" max="72" defaultValue="24" className="mt-4 w-full accent-emerald-400" /><div className="mt-1 flex justify-between text-[10px] text-slate-600"><span>1h</span><span>72h</span></div></div>
-        <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5"><p className="text-[11px] text-slate-600">Drafts are local to this prototype.</p><button className="button-primary"><Plus size={15} /> Create scenario <ArrowRight size={14} /></button></div>
+
+        {loadingNetwork && <div className="mt-6 flex min-h-40 items-center justify-center gap-2 text-xs text-slate-400" role="status"><LoaderCircle size={15} className="animate-spin text-mint" /> Loading facilities from Ripple API…</div>}
+        {!loadingNetwork && loadError && <div className="mt-5 rounded-lg border border-rose-300/15 bg-rose-300/[.05] p-4" role="alert"><div className="flex gap-2 text-rose-200"><AlertTriangle size={15} className="mt-0.5 shrink-0" /><div><p className="text-xs font-medium">Couldn’t load facilities</p><p className="mt-1 text-[11px] leading-relaxed text-rose-200/70">{loadError}</p></div></div><button type="button" onClick={() => setRetryKey((key) => key + 1)} className="button-secondary mt-3"><RefreshCw size={13} /> Retry</button></div>}
+
+        {!loadingNetwork && !loadError && network && <>
+          <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {network.nodes.map((node) => <label key={node.id} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${selectedSet.has(node.id) ? 'border-mint/30 bg-mint/[.045]' : 'border-line bg-[#0d1117] hover:border-slate-600'}`}>
+              <input type="checkbox" checked={selectedSet.has(node.id)} onChange={(event) => updateSelection(node.id, event.target.checked)} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-400" aria-label={`Fail ${node.id}, ${typeLabel[node.type]}`} />
+              <span className="min-w-0 flex-1"><span className="block truncate font-mono text-xs font-semibold text-slate-100">{node.id}</span><span className="mt-1 block text-[10px] text-slate-500">Facility ID</span></span>
+              <span className={`rounded border px-1.5 py-1 text-[9px] ${typeTone[node.type]}`}>{typeLabel[node.type]}</span>
+            </label>)}
+          </div>
+
+          <div className="mt-5 border-t border-line pt-4">
+            <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-slate-300">Failed facilities</p><span className="text-[10px] text-slate-600">{selectedNodes.length} selected</span></div>
+            {selectedNodes.length ? <div className="mt-2.5 flex flex-wrap gap-2">{selectedNodes.map((id) => {
+              const node = network.nodes.find((item) => item.id === id)
+              if (!node) return null
+              return <span key={id} className="inline-flex items-center gap-2 rounded-md border border-mint/20 bg-mint/[.05] px-2 py-1.5"><span className="font-mono text-[10px] text-slate-200">{id}</span><span className="text-[9px] text-slate-500">{typeLabel[node.type]}</span><button type="button" onClick={() => updateSelection(id, false)} aria-label={`Remove ${id}`} className="text-slate-500 transition hover:text-rose-300"><X size={12} /></button></span>
+            })}</div> : <p className="mt-2 text-[11px] text-slate-600">No facilities selected. Choose at least one above.</p>}
+          </div>
+        </>}
+
+        {simulationError && <p className="mt-4 rounded-lg border border-rose-300/15 bg-rose-300/[.05] px-3 py-2.5 text-xs leading-relaxed text-rose-200" role="alert"><AlertTriangle size={14} className="mr-2 inline align-[-2px]" />{simulationError}</p>}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <p className="text-[10px] text-slate-600">The network is loaded directly from the backend. No mock scenario results are used.</p>
+          <button type="submit" className="button-primary" disabled={loadingNetwork || Boolean(loadError) || !network || selectedNodes.length === 0 || running}>
+            {running ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}{running ? 'Running simulation…' : 'Run simulation'}
+          </button>
+        </div>
       </section>
-      <aside className="space-y-5">
-        <div className="panel-card p-5"><p className="text-sm font-semibold text-slate-200">Workflow</p><div className="mt-5 space-y-5">{steps.map(({ number, title, text, icon: Icon, active }) => <div key={number} className="flex gap-3"><div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${active ? 'border-mint/25 bg-mint/10 text-mint' : 'border-line bg-[#0d1117] text-slate-500'}`}><Icon size={15} /></div><div><div className="flex items-center gap-2"><span className="text-[10px] text-slate-600">{number}</span><p className={`text-xs font-medium ${active ? 'text-slate-200' : 'text-slate-400'}`}>{title}</p></div><p className="mt-1 text-[11px] text-slate-600">{text}</p></div></div>)}</div></div>
-        <div className="rounded-xl border border-mint/10 bg-gradient-to-br from-mint/[.08] to-transparent p-5"><Sparkles size={17} className="text-mint" /><p className="mt-3 text-sm font-medium text-slate-200">Start from a template</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Use a common event pattern as a starting point for your scenario.</p><button className="mt-4 text-xs font-medium text-mint">Browse templates <ArrowRight size={13} className="ml-1 inline" /></button></div>
+
+      <aside className="space-y-4">
+        <section className="panel-card p-5"><div className="flex items-center gap-2"><span className="icon-tile icon-mint"><Check size={15} /></span><h3 className="text-sm font-semibold text-slate-200">Request preview</h3></div><p className="mt-3 text-[11px] leading-relaxed text-slate-500">The backend receives the loaded network and selected failed node IDs.</p><pre className="mt-3 overflow-x-auto rounded-lg border border-line bg-[#0d1117] p-3 text-[10px] leading-relaxed text-slate-400">{JSON.stringify({ failed_nodes: selectedNodes }, null, 2)}</pre><p className="mt-2 font-mono text-[9px] text-slate-600">POST /simulate</p></section>
+        <section className="rounded-xl border border-sky-300/10 bg-gradient-to-br from-sky-300/[.06] to-transparent p-5"><p className="text-[10px] font-medium uppercase tracking-[.12em] text-sky-200/80">Network inputs</p><p className="mt-2 text-xs font-medium text-slate-200">Backend-supported parameters only</p><p className="mt-1 text-[11px] leading-relaxed text-slate-500">Failure selection is based on real node IDs and types. Duration, timing, and event profiles are not part of this API request.</p></section>
       </aside>
-    </div>
+    </form>
+
+    {running && <section className="panel-card flex items-center gap-3 p-5" role="status"><LoaderCircle size={17} className="animate-spin text-mint" /><div><p className="text-xs font-medium text-slate-200">Running cascade simulation</p><p className="mt-1 text-[10px] text-slate-500">Waiting for the Ripple backend response…</p></div></section>}
+    {result && <SimulationSummary result={result} />}
   </div>
 }
