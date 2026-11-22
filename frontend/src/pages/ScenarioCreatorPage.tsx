@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, LoaderCircle, Play, RefreshCw, X } from 'lucide-react'
 import { fetchDemoNetwork, simulateNetwork } from '../api/client'
-import type { FacilityType, SimulationResult, SupplyNetwork } from '../api/types'
+import type { FacilityType, ScenarioRun, SimulationResult, SupplyNetwork } from '../api/types'
 import { SectionHeading } from '../components/SectionHeading'
+import type { SectionId } from '../types'
 
 const typeLabel: Record<FacilityType, string> = {
   supplier: 'Supplier',
@@ -71,7 +72,10 @@ function SimulationSummary({ result }: { result: SimulationResult }) {
   </section>
 }
 
-export function ScenarioCreatorPage() {
+export function ScenarioCreatorPage({ onScenarioRunChange, onNavigate }: {
+  onScenarioRunChange?: (run: ScenarioRun | null) => void
+  onNavigate?: (section: SectionId) => void
+} = {}) {
   const [network, setNetwork] = useState<SupplyNetwork | null>(null)
   const [selectedNodes, setSelectedNodes] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -107,7 +111,8 @@ export function ScenarioCreatorPage() {
       : current.filter((id) => id !== nodeId))
     setSimulationError(null)
     setResult(null)
-  }, [])
+    onScenarioRunChange?.(null)
+  }, [onScenarioRunChange])
 
   async function submitScenario(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -121,8 +126,11 @@ export function ScenarioCreatorPage() {
     setRunning(true)
     setSimulationError(null)
     setResult(null)
+    onScenarioRunChange?.(null)
     try {
-      setResult(await simulateNetwork(network, failedNodes))
+      const nextResult = await simulateNetwork(network, failedNodes)
+      setResult(nextResult)
+      onScenarioRunChange?.({ network, result: nextResult })
     } catch (error) {
       setSimulationError(error instanceof Error ? error.message : 'The simulation could not be completed.')
     } finally {
@@ -131,7 +139,7 @@ export function ScenarioCreatorPage() {
   }
 
   return <div className="space-y-5 pb-10">
-    <SectionHeading title="Scenario creator" description="Select facilities to fail and run a deterministic cascade simulation." />
+    <SectionHeading title="Scenario creator" description="Select facilities to fail and run a deterministic cascade simulation." action={result && onNavigate ? <button type="button" className="button-secondary" onClick={() => onNavigate('Ripple Simulation')}>View cascade animation <Play size={13} /></button> : undefined} />
 
     <form className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.72fr)]" onSubmit={submitScenario}>
       <section className="panel-card p-5 sm:p-6">

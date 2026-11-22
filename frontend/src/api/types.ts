@@ -62,3 +62,8 @@ export type SimulationResult = {
   intervention_cost: number
   reasoning: string[]
 }
+
+export type ScenarioRun = {
+  network: SupplyNetwork
+  result: SimulationResult
+}

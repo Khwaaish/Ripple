@@ -1,25 +1,35 @@
-import { ArrowDownRight, ArrowRight, CalendarDays, Clock3, Play, Plus, Radio, RotateCcw } from 'lucide-react'
+import { Activity, ArrowRight, Layers3, ShieldAlert } from 'lucide-react'
+import type { ScenarioRun } from '../api/types'
+import { CascadeVisualization } from '../components/simulation/CascadeVisualization'
 import { SectionHeading } from '../components/SectionHeading'
+import type { SectionId } from '../types'
 
-const runs = [
-  { name: 'Regional port disruption', date: 'Oct 28, 2026 · 09:42 AM', status: 'Completed', impact: '31.4%', strategy: 'Reroute', duration: '0.8s' },
-  { name: 'Supplier capacity reduction', date: 'Oct 27, 2026 · 03:16 PM', status: 'Completed', impact: '18.7%', strategy: 'Baseline', duration: '0.6s' },
-  { name: 'Warehouse WH-02 outage', date: 'Oct 26, 2026 · 11:08 AM', status: 'Completed', impact: '24.1%', strategy: 'Prioritize', duration: '0.7s' },
-]
-
-export function SimulationPage() {
-  return <div className="space-y-6 pb-10">
-    <SectionHeading title="Ripple simulation" description="Run deterministic cascade scenarios against your network." action={<button className="button-primary"><Play size={14} fill="currentColor" /> Run simulation</button>} />
-    <div className="grid gap-4 sm:grid-cols-3">
-      <div className="panel-card p-5"><p className="text-xs text-slate-500">Simulations this week</p><p className="mt-3 text-2xl font-semibold text-slate-100">18</p><p className="mt-2 text-[11px] text-mint">+4 vs. last week</p></div>
-      <div className="panel-card p-5"><p className="text-xs text-slate-500">Median runtime</p><p className="mt-3 text-2xl font-semibold text-slate-100">0.7<span className="ml-1 text-sm font-medium text-slate-500">sec</span></p><p className="mt-2 text-[11px] text-slate-600">Deterministic engine</p></div>
-      <div className="panel-card p-5"><p className="text-xs text-slate-500">Lowest modeled impact</p><p className="mt-3 text-2xl font-semibold text-slate-100">12.3<span className="ml-1 text-sm font-medium text-slate-500">%</span></p><p className="mt-2 flex items-center gap-1 text-[11px] text-mint"><ArrowDownRight size={13} /> With intervention</p></div>
+export function SimulationPage({ scenarioRun, onNavigate }: {
+  scenarioRun: ScenarioRun | null
+  onNavigate: (section: SectionId) => void
+}) {
+  if (!scenarioRun) {
+    return <div className="space-y-5 pb-10">
+      <SectionHeading title="Ripple simulation" description="Watch a real engine run propagate through the supply network." />
+      <section className="panel-card flex min-h-[360px] flex-col items-center justify-center p-8 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-mint/10 bg-mint/[.06] text-mint"><Activity size={20} /></span>
+        <h3 className="mt-4 text-base font-semibold text-slate-100">No scenario result to play yet</h3>
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500">Create a scenario and run it through the simulation API. Its actual propagation rounds will appear here.</p>
+        <button className="button-primary mt-5" onClick={() => onNavigate('Scenario Creator')}>Open Scenario Creator <ArrowRight size={14} /></button>
+      </section>
     </div>
-    <section className="panel-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-5 sm:px-6"><div><h3 className="text-sm font-semibold text-slate-200">Recent simulation runs</h3><p className="mt-1 text-xs text-slate-500">Mock activity for dashboard layout</p></div><div className="flex gap-2"><button className="button-secondary"><CalendarDays size={14} /> Last 7 days</button><button className="toolbar-button" aria-label="Refresh simulations"><RotateCcw size={15} /></button></div></div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left"><thead><tr className="border-b border-line bg-white/[.015] text-[10px] uppercase tracking-wider text-slate-600"><th className="px-6 py-3 font-medium">Scenario</th><th className="px-4 py-3 font-medium">Status</th><th className="px-4 py-3 font-medium">Impact score</th><th className="px-4 py-3 font-medium">Best strategy</th><th className="px-4 py-3 font-medium">Runtime</th><th className="px-6 py-3" /></tr></thead><tbody className="divide-y divide-line/70">{runs.map((run) => <tr key={run.name} className="text-xs transition hover:bg-white/[.015]"><td className="px-6 py-4"><p className="font-medium text-slate-200">{run.name}</p><p className="mt-1 text-[10px] text-slate-600">{run.date}</p></td><td className="px-4 py-4"><span className="inline-flex items-center gap-1.5 text-mint"><span className="h-1.5 w-1.5 rounded-full bg-mint" />{run.status}</span></td><td className="px-4 py-4 font-medium text-slate-300">{run.impact}</td><td className="px-4 py-4"><span className="rounded-md border border-line bg-panel px-2 py-1 text-[10px] text-slate-400">{run.strategy}</span></td><td className="px-4 py-4 text-slate-500">{run.duration}</td><td className="px-6 py-4 text-right"><button className="text-slate-600 hover:text-slate-300" aria-label={`Open ${run.name}`}><ArrowRight size={15} /></button></td></tr>)}</tbody></table></div>
-      <div className="flex items-center justify-between border-t border-line px-6 py-3 text-[10px] text-slate-600"><span>Showing 3 of 18 runs</span><button className="text-slate-400 hover:text-slate-200">View all runs</button></div>
+  }
+
+  const { result, network } = scenarioRun
+  const roundCount = result.round_snapshots.length
+  return <div className="space-y-5 pb-10">
+    <SectionHeading title="Ripple simulation" description="Replay the deterministic cascade returned by the Ripple engine." action={<span className="inline-flex items-center gap-2 rounded-md border border-mint/15 bg-mint/[.05] px-2.5 py-1.5 text-[10px] text-mint"><span className="status-dot status-dot-green" /> Engine result loaded</span>} />
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Simulation summary">
+      <div className="map-summary-card"><span className="map-summary-icon text-rose-300"><ShieldAlert size={15} /></span><div><p className="map-summary-value">{result.failed_nodes.join(', ')}</p><p className="map-summary-label">Initially failed</p></div></div>
+      <div className="map-summary-card"><span className="map-summary-icon text-amber-200"><Activity size={15} /></span><div><p className="map-summary-value capitalize">{result.severity}</p><p className="map-summary-label">{(result.impact_score * 100).toFixed(1)}% impact score</p></div></div>
+      <div className="map-summary-card"><span className="map-summary-icon text-sky-300"><Layers3 size={15} /></span><div><p className="map-summary-value">{roundCount} rounds</p><p className="map-summary-label">From engine round snapshots</p></div></div>
+      <div className="map-summary-card"><span className="map-summary-icon text-violet-300"><Activity size={15} /></span><div><p className="map-summary-value">{result.all_impacted_nodes.length} / {network.nodes.length}</p><p className="map-summary-label">Impacted / total facilities</p></div></div>
     </section>
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-panel/65 p-4"><div className="icon-tile icon-blue"><Radio size={17} /></div><div className="flex-1"><p className="text-xs font-medium text-slate-300">No simulation is currently running</p><p className="mt-1 text-[11px] text-slate-600">Create or select a scenario to explore its modeled cascade.</p></div><button className="button-secondary max-sm:hidden"><Plus size={14} /> New scenario</button><Clock3 size={15} className="text-slate-600 sm:hidden" /></div>
+    <CascadeVisualization run={scenarioRun} />
   </div>
 }

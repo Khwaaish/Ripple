@@ -19,7 +19,7 @@ const MAP_HEIGHT = 630
 const nodeTypes: NodeTypes = { facility: FacilityNodeView }
 const edgeTypes: EdgeTypes = { supply: SupplyEdgeView }
 
-function nodePositions(nodes: NetworkNode[]) {
+export function nodePositions(nodes: NetworkNode[]) {
   const groups: Record<NetworkNode['type'], NetworkNode[]> = { supplier: [], warehouse: [], store: [] }
   for (const node of [...nodes].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))) groups[node.type].push(node)
   const positions = new Map<string, { x: number; y: number }>()
@@ -40,7 +40,7 @@ function nodePositions(nodes: NetworkNode[]) {
   return positions
 }
 
-function spaceEdgeLabels(edges: NetworkEdge[], positions: Map<string, { x: number; y: number }>) {
+export function spaceEdgeLabels(edges: NetworkEdge[], positions: Map<string, { x: number; y: number }>) {
   const grouped = new Map<string, { edge: NetworkEdge; baseY: number; order: number }[]>()
   edges.forEach((edge, order) => {
     const source = positions.get(edge.src)!
