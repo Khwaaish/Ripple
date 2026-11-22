@@ -1,0 +1,61 @@
+# Local credentials and private configuration
+.env
+.env.*
+!.env.example
+!.env.template
+.netrc
+.npmrc
+.pypirc
+.aws/
+.ssh/
+credentials/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+
+# Local Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Frontend dependencies and generated output
+node_modules/
+**/dist/
+**/build/
+frontend/.vite/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Generated datasets and account-specific adaptation artifacts
+/data/train.jsonl
+/data/test.jsonl
+/data/dataset_quality_report.json
+/data/adaption_trial/*.json
+/data/adaption_trial/*.jsonl
+/data/adaption_trial/adaptation_examples.md
+/data/adaption_trial/run_id_review.md
+
+# Local external-service connectivity check calls Adaption on import
+/api_test.py
+
+# Temporary files, logs, and OS/editor metadata
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
