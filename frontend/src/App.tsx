@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { ChevronRight, Database, Wifi } from 'lucide-react'
 import { Sidebar } from './layout/Sidebar'
 import { Topbar } from './layout/Topbar'
@@ -11,6 +11,8 @@ import { InterventionCenterPage } from './pages/InterventionCenterPage'
 import { AIAnalystPage } from './pages/AIAnalystPage'
 import type { SectionId } from './types'
 import type { ScenarioRun } from './api/types'
+
+const AdaptionShowcasePage = lazy(() => import('./pages/AdaptionShowcasePage').then((page) => ({ default: page.AdaptionShowcasePage })))
 
 function PageContent({ section, onNavigate, scenarioRun, onScenarioRunChange }: {
   section: SectionId
@@ -25,6 +27,7 @@ function PageContent({ section, onNavigate, scenarioRun, onScenarioRunChange }: 
     case 'Ripple Simulation': return <SimulationPage scenarioRun={scenarioRun} onNavigate={onNavigate} />
     case 'Intervention Center': return <InterventionCenterPage scenarioRun={scenarioRun} onNavigate={onNavigate} />
     case 'AI Analyst': return <AIAnalystPage />
+    case 'Adaption Showcase': return <Suspense fallback={<div className="panel-card p-5 text-xs text-slate-500" role="status">Loading Adaption Showcase…</div>}><AdaptionShowcasePage /></Suspense>
   }
 }
 

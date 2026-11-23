@@ -1,4 +1,4 @@
-import { Activity, Bot, Boxes, ChevronDown, CircleHelp, Command, GitBranch, LayoutDashboard, Network, Settings2, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
+import { Activity, Bot, ChevronDown, CircleHelp, GitBranch, LayoutDashboard, Network, Settings2, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SectionId } from '../types'
 
@@ -9,6 +9,7 @@ const items: { label: SectionId; icon: LucideIcon }[] = [
   { label: 'Ripple Simulation', icon: Activity },
   { label: 'Intervention Center', icon: ShieldCheck },
   { label: 'AI Analyst', icon: Bot },
+  { label: 'Adaption Showcase', icon: Sparkles },
 ]
 
 export function Sidebar({ active, onNavigate }: { active: SectionId; onNavigate: (section: SectionId) => void }) {

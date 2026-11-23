@@ -50,4 +50,15 @@ describe('App scenario-to-simulation flow', () => {
     expect(await screen.findByText('Engine recommendation · rank 1')).toBeInTheDocument()
     expect(compareNetworkStrategies).toHaveBeenCalledWith(demoNetworkFixture, ['S1'], expect.any(AbortSignal))
   })
+
+  it('opens the Adaption Showcase from primary navigation', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByTitle('Adaption Showcase'))
+
+    expect(await screen.findByRole('heading', { name: 'Adaption showcase' })).toBeInTheDocument()
+    expect(screen.getByText('PLATFORM-REPORTED TRAINING WIN RATES')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Inference validation in progress')
+  })
 })
