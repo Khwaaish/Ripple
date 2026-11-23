@@ -1,0 +1,6 @@
+# Colab's GPU runtime provides the CUDA-matched PyTorch build. Do not replace it
+# with a generic pip torch wheel from this file.
+transformers>=4.50,<5
+accelerate>=1.6,<2
+peft>=0.15,<1
+safetensors>=0.5.3,<1
