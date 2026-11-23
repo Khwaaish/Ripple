@@ -45,6 +45,7 @@ frontend/vite.config.d.ts
 /data/adaption_trial/*.jsonl
 /data/adaption_trial/adaptation_examples.md
 /data/adaption_trial/run_id_review.md
+/data/evaluation/
 
 # Local external-service connectivity check calls Adaption on import
 /api_test.py

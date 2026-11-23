@@ -23,7 +23,7 @@ function PageContent({ section, onNavigate, scenarioRun, onScenarioRunChange }: 
     case 'System Map': return <SystemMapPage />
     case 'Scenario Creator': return <ScenarioCreatorPage onNavigate={onNavigate} onScenarioRunChange={onScenarioRunChange} />
     case 'Ripple Simulation': return <SimulationPage scenarioRun={scenarioRun} onNavigate={onNavigate} />
-    case 'Intervention Center': return <InterventionCenterPage />
+    case 'Intervention Center': return <InterventionCenterPage scenarioRun={scenarioRun} onNavigate={onNavigate} />
     case 'AI Analyst': return <AIAnalystPage />
   }
 }

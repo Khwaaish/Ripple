@@ -222,6 +222,101 @@ def run_api_actions(*, upload: bool, estimate: bool, dataset_id: str | None = No
     return report
 
 
+def upload_training_dataset(prepared: dict[str, Any]) -> dict[str, Any]:
+    """Upload the separately audited 2,000-row train artifact in raw mode only."""
+    from data.adaption_trial.prepare_training_dataset import (
+        DATASET_NAME, EXPECTED_ROWS, UPLOAD_COLUMNS, UPLOAD_PATH, UPLOAD_REPORT_PATH,
+        prepare_training_dataset,
+    )
+
+    expected = prepare_training_dataset()
+    if any(prepared.get(key) != expected.get(key) for key in (
+        "dataset_name", "source_file", "source_split", "source_sha256", "upload_file",
+        "upload_record_count", "upload_sha256", "upload_columns",
+    )) or prepared.get("upload_record_count") != EXPECTED_ROWS:
+        raise ValueError("Prepared artifact metadata changed before upload")
+    payload_hash = __import__("hashlib").sha256(UPLOAD_PATH.read_bytes()).hexdigest()
+    if payload_hash != prepared["upload_sha256"]:
+        raise ValueError("Prepared upload artifact hash changed before upload")
+
+    report = {
+        **prepared,
+        "api_key_configured": load_api_key_environment(),
+        "adaption_sdk_version": sdk_version(),
+        "upload_attempted": False,
+        "ingestion_status": None,
+        "ingested_row_count": None,
+        "column_mapping": COLUMN_MAPPING,
+        "column_mapping_verified": False,
+        "adaptation_started": False,
+        "autoscientist_started": False,
+    }
+    if not report["api_key_configured"]:
+        report["upload_status"] = "skipped_no_api_key"
+        return report
+
+    from adaption import Adaption
+
+    client = None
+    try:
+        # Read-only duplicate-name check; do not create a second dataset on rerun.
+        client = Adaption(max_retries=0)
+        matches = [item for item in client.datasets.list(q=DATASET_NAME, limit=100)
+                   if getattr(item, "name", None) == DATASET_NAME]
+        if matches:
+            report["upload_status"] = "blocked_dataset_name_already_exists"
+            report["existing_dataset_id"] = str(getattr(matches[0], "dataset_id", "")) or None
+            return report
+
+        report["upload_attempted"] = True
+        uploaded = client.datasets.upload_file(
+            str(UPLOAD_PATH),
+            name=DATASET_NAME,
+            processing_mode="raw",
+            column_mapping=COLUMN_MAPPING,
+        )
+        dataset_id = getattr(uploaded, "dataset_id", None)
+        if not dataset_id:
+            report["upload_status"] = "failed_missing_dataset_id"
+            return report
+        report["dataset_id"] = str(dataset_id)
+        report["upload_status"] = "uploaded"
+
+        status = client.datasets.wait_for_completion(str(dataset_id), timeout=600)
+        report["ingestion_status"] = str(getattr(status, "status", "unknown"))
+        report["ingested_row_count"] = getattr(status, "row_count", None)
+        if report["ingestion_status"] != "succeeded" or report["ingested_row_count"] != EXPECTED_ROWS:
+            report["upload_status"] = "ingestion_verification_failed"
+            return report
+
+        dataset = client.datasets.get(str(dataset_id))
+        dataset_count = getattr(dataset, "row_count", None)
+        if dataset_count != EXPECTED_ROWS:
+            report["ingested_row_count"] = dataset_count
+            report["upload_status"] = "dataset_metadata_row_count_mismatch"
+            return report
+        mapping = _mapping_dict(getattr(dataset, "configured_column_mapping", None))
+        report["configured_column_mapping"] = mapping
+        if mapping:
+            if any(mapping.get(column) != column for column in UPLOAD_COLUMNS):
+                report["upload_status"] = "column_mapping_verification_failed"
+                return report
+            report["column_mapping_verification_method"] = "dataset_configured_column_mapping"
+        else:
+            # The SDK's raw upload call accepts this explicit mapping and the API
+            # confirmed that exactly the audited row count was materialized.
+            report["column_mapping_verification_method"] = "raw_upload_explicit_mapping_and_ingested_row_count"
+        report["column_mapping_verified"] = True
+        report["upload_status"] = "ingested_verified"
+    except Exception as exc:  # Never print or save API exception text.
+        report["api_error_type"] = type(exc).__name__
+        report["upload_status"] = "api_error"
+    finally:
+        if client is not None:
+            client.close()
+    return report
+
+
 def save_safe_report(report: dict[str, Any]) -> None:
     """Persist only non-secret status/configuration fields."""
     REPORT_PATH.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")

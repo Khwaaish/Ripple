@@ -67,3 +67,25 @@ export type ScenarioRun = {
   network: SupplyNetwork
   result: SimulationResult
 }
+
+export type InterventionStrategy = 'none' | 'reroute' | 'backup_supplier' | 'prioritize'
+
+/** Matches engine.interventions.InterventionComparison as returned by POST /compare. */
+export type InterventionScenarioMetrics = {
+  impact_score: number
+  nodes_disrupted: string[]
+  critical_shortages: string[]
+  overloaded_nodes: string[]
+  estimated_recovery_time_h: number
+  intervention_cost: number
+  relative_impact_vs_baseline: number | null
+  reasoning: string[]
+  node_impacts: SimulationResult['node_impacts']
+}
+
+export type InterventionComparison = {
+  scenarios: Record<InterventionStrategy, InterventionScenarioMetrics>
+  recommended_strategy: InterventionStrategy
+  ranking: InterventionStrategy[]
+  recommendation_reason: string
+}
